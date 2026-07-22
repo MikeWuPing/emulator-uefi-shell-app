@@ -5,12 +5,11 @@
 
 > A comprehensive Claude Code skill for developing UEFI Shell applications with EmulatorPkg.
 
-English | [简体中文](readme.md)
+English | [简体中文](README.md)
 
 ## Overview
 
 This skill provides Claude Code with complete knowledge for UEFI Shell application development, covering the entire workflow from environment setup to debugging and deployment. Supports both Windows (Visual Studio 2019) and Linux (GCC) platforms.
-
 
 ## Features
 
@@ -19,6 +18,10 @@ This skill provides Claude Code with complete knowledge for UEFI Shell applicati
 - **Code Templates** — INF files, Shell applications, and GOP graphics templates
 - **Debugging Guide** — Print output, DebugLib, VS2019 debugger integration
 - **CJK Support** — Solutions for Chinese character encoding errors (C4819) in VS2019
+- **QEMU run path** — Run apps with QEMU + OVMF + virtual FAT image in addition to Emulator/WinHost
+- **Automatic snapshots** — Capture timestamped gameplay frames into `snapshot/` for multimodal analysis
+- **Version consistency check** — Increment build number on every build, print version to serial/window, verify against `expected_version.txt`
+- **Eyes and hands (QMP closed loop)** — monitor `screendump` captures raw VRAM frames (reliably avoids the all-black SDL window capture problem) and `sendkey` injects keyboard input, forming a see-and-act loop for unattended "build → run → look → press → verify" cycles
 
 ## Installation
 
@@ -70,6 +73,10 @@ How do I debug Shell applications in the emulator?
 | Build Error Handling | Chinese encoding error solutions, warning suppression |
 | Emulator Debugging | Print debugging, DebugLib, VS2019 debugger |
 | Common Protocols & Libraries | GOP graphics protocol, SimpleTextIn input, memory allocation |
+| Versioned Build | `VERSION.txt` auto-increment, `Version.h` generation, `expected_version.txt` output |
+| QEMU Run | OVMF, virtual FAT image, serial log redirection |
+| Snapshot Analysis | Timed frame capture (monitor screendump preferred), multimodal goal validation |
+| QMP Closed Loop | screendump frame capture (eyes), sendkey input injection (hands), unattended verify cycle |
 
 ## Trigger Conditions
 
@@ -80,6 +87,12 @@ The skill is automatically triggered when users ask about:
 - GOP graphics programming
 - UEFI application debugging
 - Chinese/CJK encoding compilation errors
+- Running UEFI Shell apps under QEMU
+- Analyzing run results with snapshot screenshots
+- Preventing stale binaries after silent build failures
+- All-black QEMU/SDL window captures (use monitor screendump instead)
+- Driving a QEMU app from scripts (key injection, auto start/play)
+- Unattended "build → run → look → press → verify" closed loops
 
 ## Supported Protocols
 
@@ -99,11 +112,16 @@ The skill is automatically triggered when users ask about:
 
 ## Quick Reference
 
-| Task | Command |
-|------|---------|
-| Initialize Environment | `edksetup.bat` (Windows) / `source edksetup.sh` (Linux) |
+| Task | Command/Template |
+|------|------------------|
+| Initialize Environment | Project-configured `edksetup.bat` (Windows) / `source edksetup.sh` (Linux) |
 | Build Emulator | `build -p EmulatorPkg\EmulatorPkg.dsc -a X64 -t VS2019 -b DEBUG` |
 | Run Emulator | `Build\Emulator\DEBUG_VS2019\X64\WinHost.exe` |
+| Build with new version | `templates/Build-UefiApp.ps1` |
+| Run under QEMU with snapshots | `templates/Run-QemuWithSnapshots.ps1` |
+| Check runtime version | `templates/Test-AppVersion.ps1` |
+| VRAM frame capture (preferred) | monitor `screendump file.ppm` (use when SDL window captures go black) |
+| Inject keys | monitor `sendkey ret` / `sendkey up 120` (simulate holds with rapid taps) |
 | Clean & Rebuild | `build clean && build` |
 
 ## Resources
