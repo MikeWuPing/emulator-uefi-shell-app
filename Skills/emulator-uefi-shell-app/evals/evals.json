@@ -30,6 +30,24 @@
       "prompt": "如何在Emulator中调试Shell应用？",
       "expected_output": "应该解释Print调试、DebugLib使用、VS2019调试器使用方法",
       "files": []
+    },
+    {
+      "id": 6,
+      "prompt": "除了 Emulator/WinHost，怎么用 QEMU 运行 UEFI Shell app？",
+      "expected_output": "应该说明使用目标项目配置好的 QEMU、OVMF 固件和虚拟 FAT 镜像，串口重定向到 run_logs，并使用 templates/Run-QemuWithSnapshots.ps1",
+      "files": []
+    },
+    {
+      "id": 7,
+      "prompt": "运行 app 后如何判断它是否达到目标，而不是问用户？",
+      "expected_output": "应该要求先检查串口日志 APP_VERSION 与 expected_version.txt，再读取 snapshot/ 中带时间戳的窗口客户区截图进行多模态分析，并引用证据文件",
+      "files": []
+    },
+    {
+      "id": 8,
+      "prompt": "如何防止编译静默失败后运行旧版本？",
+      "expected_output": "应该说明 VERSION.txt 自动递增 build、生成 Version.h、app 在串口和 GOP 窗口输出版本，并用 Test-AppVersion.ps1 比对 expected_version.txt",
+      "files": []
     }
   ]
 }
