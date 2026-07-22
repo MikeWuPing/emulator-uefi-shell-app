@@ -10,6 +10,7 @@
 ## 简介
 
 本技能为 Claude Code 提供 UEFI Shell 应用程序开发的完整知识库，涵盖从环境搭建到调试部署的全流程。支持 Windows（Visual Studio 2019）和 Linux（GCC）双平台开发环境。
+
 <img width="512" height="480" alt="intro" src="https://github.com/user-attachments/assets/e6d96822-c5be-4d65-8680-71fd7ab53187" />
 <img width="512" height="480" alt="gameplay_turret" src="https://github.com/user-attachments/assets/f73d49c7-0c24-4335-b69d-63f10882d197" />
 <img width="512" height="480" alt="boss_fight" src="https://github.com/user-attachments/assets/aa3ec6a8-6ab4-401e-baab-bb5f27181754" />
