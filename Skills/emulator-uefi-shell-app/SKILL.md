@@ -1,12 +1,13 @@
 ---
 name: emulator-uefi-shell-app
-description: |
-  基于 EmulatorPkg 的 UEFI Shell 应用程序开发技能。当用户需要在 UEFI Shell 环境下开发应用程序、在 EmulatorPkg 模拟器中运行和调试时使用。覆盖 Shell App 创建、INF 文件配置、常用协议（GOP、SimpleTextIn）、编译部署、中文编码问题处理、以及模拟器调试方法。支持 Windows（VS2019）和 Linux（GCC）平台。
+description: Use when developing UEFI Shell applications, creating INF/GOP/SimpleTextIn code, building or debugging with EmulatorPkg/WinHost or QEMU, handling VS2019/GCC or encoding issues, validating runs with version stamps and snapshot screenshots, or driving QEMU apps hands-on via monitor screendump/sendkey closed-loop.
 ---
 
 # EmulatorPkg UEFI Shell 应用程序开发指南
 
 本技能提供在 EmulatorPkg 模拟器环境下开发 UEFI Shell 应用程序的完整流程，适用于 Windows（VS2019）和 Linux（GCC）平台。
+
+本技能不假设任何特定项目或机器环境。EDK2、编译工具链、QEMU、OVMF 固件和应用输出路径都由目标项目配置；如果目标项目的 `CLAUDE.md` 或脚本已经给出这些路径，优先使用项目配置，不要重新下载或改写全局环境。
 
 ## 目录
 
@@ -600,13 +601,69 @@ FreePages(Pages, PageCount);
 
 ---
 
+## 8. 版本化构建与运行前检查
+
+每次修改代码后都必须产生新版本。推荐工程根目录维护 `VERSION.txt`，格式为两行：`VERSION=major.minor.patch` 和 `BUILD=<整数>`。构建脚本每次执行时将 `BUILD` 加一，生成 `Version.h`，并写入 `expected_version.txt`。应用必须包含 `Version.h`，启动时输出 `APP_VERSION=<major.minor.patch+build timestamp>` 到 DEBUG/串口，并把同一字符串绘制到 GOP 窗口固定角落。
+
+构建失败、版本头生成失败或目标 `.efi` 缺失时，不允许运行旧版本。运行前先检查 `expected_version.txt`、目标 `.efi` 和串口日志路径都已准备好。如果不使用 `Build-UefiApp.ps1` 而手工构建，也必须重新生成 `Version.h` 和 `expected_version.txt`；不得复用上一次构建留下的预期版本文件。
+
+## 9. QEMU 运行路径
+
+QEMU 路径与 Emulator/WinHost 路径产出相同证据：串口日志、`expected_version.txt` 和 `snapshot/` 截图。推荐用 OVMF 固件加虚拟 FAT 镜像启动：把目标 `.efi`、`startup.nsh` 和 `expected_version.txt` 放到同一个 FAT 目录，QEMU 参数将该目录映射为只读或读写驱动器，并把串口重定向到 `run_logs/yyyyMMdd_HHmmss_serial.log`。
+
+Windows PowerShell 模板见 `templates/Run-QemuWithSnapshots.ps1`。Linux 使用相同参数形态，只是把路径和进程启动命令换成 shell 等价写法。
+
+## 10. snapshot 定时截屏与多模态分析
+
+运行目标 app 后，必须在工程目录创建 `snapshot/`，并按固定间隔截取目标画面，文件名格式为 `yyyyMMdd_HHmmss_fff.png`。
+
+**首选 QEMU monitor screendump 通道**：用 `-display none` 或 SDL 窗口运行时，通过 monitor（`-monitor stdio` 或 QMP socket）执行 `screendump <file.ppm>` 抓取的是**模拟器显存内容**——与宿主机窗口状态无关，永远可靠。SDL 窗口的客户区抓屏（PowerShell/.NET 窗口截图）在 QEMU SDL 显示后端下必然全黑，**不要用它作为证据来源**；它只适用于 EmulatorPkg/WinHost 这类真实窗口。
+
+截图循环应在窗口不存在、进程退出或达到运行时长后停止，并保留已生成截图。PPM 可用 ImageMagick 或 Python/Pillow 转 PNG。
+
+分析运行结果时，先读取串口日志确认 `APP_VERSION=` 与 `expected_version.txt` 一致，再读取 `snapshot/` 截图。判断目标时必须引用具体证据，例如 `snapshot/20260718_101530_123.png` 显示版本水印和目标画面，`run_logs/20260718_101500_serial.log` 第 N 行包含一致版本。证据不足、连续黑屏、版本不一致或串口出现 ERROR 时，按失败处理，不要询问用户“运行是否正常”。
+
+## 11. 防止运行旧版本
+
+静默编译错误最常见的结果是旧 `.efi` 仍在运行目录。防错流程必须是：生成新版本，构建成功，写入 `expected_version.txt`，启动程序，读取串口版本，比对一致后才允许分析画面。`Test-AppVersion.ps1` 找不到 `APP_VERSION=`、找到多个不同版本，或版本不等于 `expected_version.txt` 时返回非零，并输出 expected/actual、串口日志路径和截图目录。
+
+## 12. QMP 监控通道：screendump 抓帧与 sendkey 输入注入（眼睛和手）
+
+QEMU monitor（人读协议 HMP，`-monitor stdio`；或 QMP JSON socket）同时提供两条闭环通道，让大模型"看见画面并动手操作"：
+
+**眼睛——screendump 抓帧：**
+
+```
+(monitor) screendump D:/proj/snapshot/000.ppm
+```
+
+抓的是虚拟机显存快照，与宿主窗口无关（SDL 窗口抓屏必黑的问题由此规避）。建议 `-display none` 或常规 SDL 均可；定时循环 screendump 即得连续帧，PPM 转 PNG 后供多模态读取。
+
+**手——sendkey 注入按键：**
+
+```
+(monitor) sendkey ret            # 单击
+(monitor) sendkey up 4500        # 按住 4500ms（make 后延时发 break）
+```
+
+键名是 QEMU 标准名：`up/down/left/right`（方向）、`a-z`、`ret`（回车）、`backspace`、`esc` 等。注意：**QEMU 模拟的 PS/2 键盘不产生 typematic 自动重复**——一次 `sendkey key N` 只有一次按下事件。应用若靠重复按键维持"按住"语义（例如节流后的长按移动），要用一串短促连点（如每 0.3s 一次 `sendkey up 120`）来模拟持续按住，而不是一次长 hold。
+
+**闭环工作流：** 构建新版本 → 启动 QEMU（`-serial file:...` 重定向串口 + monitor 通道）→ screendump 抓帧 → 多模态分析画面 → sendkey 驱动应用（开局、移动、开火、菜单操作）→ 读串口日志做断言。整个"编译-运行-看图-按键-验证"循环可以全程无人值守；SDL 窗口仅用于人工观察时，脚本化验证一律走 monitor 通道。
+
+---
+
 ## 快速参考
 
-| 任务 | 命令 |
-|------|------|
-| 初始化环境 | `edksetup.bat` |
-| 编译模拟器 | `build -p EmulatorPkg\EmulatorPkg.dsc -a X64 -t VS2019 -b DEBUG` |
+| 任务 | 命令/模板 |
+|------|-----------|
+| 初始化环境 | 目标项目配置的 `edksetup.bat` 或 `source edksetup.sh` |
+| 编译模拟器 | `build -p EmulatorPkg\EmulatorPkg.dsc -a X64 -t VS2019 -b DEBUG`（Windows）或 GCC 等价命令（Linux） |
 | 运行模拟器 | `Build\Emulator\DEBUG_VS2019\X64\WinHost.exe` |
+| QEMU 运行带截图 | `templates/Run-QemuWithSnapshots.ps1` |
+| 生成新版本并构建 | `templates/Build-UefiApp.ps1` |
+| 检查运行版本 | `templates/Test-AppVersion.ps1` |
+| 显存抓帧（首选） | monitor `screendump file.ppm`（SDL 窗口抓屏必黑时用它） |
+| 注入按键 | monitor `sendkey ret` / `sendkey up 120`（长按用连点模拟） |
 | 清理重编 | `build clean && build` |
 
 ---
@@ -623,6 +680,11 @@ FreePages(Pages, PageCount);
 | 屏幕闪烁后崩溃 | 使用双缓冲 + Blt，不要直接访问 FrameBufferBase |
 | 分辨率超出屏幕 | 缩小 TILE_SIZE 或检查 UI 布局是否超出 640x480 |
 | 内存分配失败 | 检查缓冲区大小计算是否溢出，使用 (UINTN) 强制转换 |
+| 运行了旧版本 | 检查 `expected_version.txt`、串口日志 `APP_VERSION=` 和 `Test-AppVersion.ps1` 返回码 |
+| snapshot 没有截图 | 确认目标窗口标题/进程名、截图脚本是否仍在运行、目录是否有写权限 |
+| SDL 窗口截图全黑 | 改用 monitor `screendump` 抓显存快照，SDL 客户区抓屏不可用 |
+| sendkey 按住无效 | QEMU 无 typematic 重复，用短促连点序列模拟持续按住 |
+| QEMU 无法启动 app | 检查 OVMF 路径、虚拟 FAT 镜像内容、`startup.nsh` 和目标 `.efi` 是否在同一目录 |
 
 ---
 
